@@ -172,3 +172,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+cache*
+logdir/
+logs/
+model_checkpoint.keras
+beans_disease_classification_transfer_learning.keras
