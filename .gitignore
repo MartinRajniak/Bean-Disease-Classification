@@ -176,5 +176,8 @@ cython_debug/
 cache*
 logdir/
 logs/
-*.keras
-*.tflite
+
+# Mobile includes tflite files so rather name all that need to be excluded
+model_checkpoint.keras
+beans_disease_classification_transfer_learning.keras
+beans_disease_classification_transfer_learning.tflite
