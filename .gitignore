@@ -173,9 +173,14 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# Project specific temporary folders
+backup/
 cache*
 logdir/
 logs/
+
+# Local data - local server runs
+local_data/
 
 # Mobile includes tflite files so rather name all that need to be excluded
 model_checkpoint.keras
