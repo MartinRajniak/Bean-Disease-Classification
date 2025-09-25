@@ -16,6 +16,7 @@ services:
     volumes:
       - ./dags:/opt/airflow/dags
       - ./src:/opt/airflow/src
+      - ./local_data/airflow_data:/opt/airflow/data
     environment:
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
@@ -25,4 +26,6 @@ services:
         airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin || true &&
         airflow standalone
       "
+    depends_on:
+      - mlflow
     restart: unless-stopped
