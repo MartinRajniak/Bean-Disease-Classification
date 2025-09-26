@@ -17,7 +17,7 @@ echo "Image: $IMAGE_NAME:$IMAGE_TAG"
 echo "=========================================="
 
 # Run the Docker build command
-docker build -t "$IMAGE_NAME:$IMAGE_TAG" .
+docker build --progress=plain -t "$IMAGE_NAME:$IMAGE_TAG" .
 
 # Check the exit status
 if [ $? -eq 0 ]; then

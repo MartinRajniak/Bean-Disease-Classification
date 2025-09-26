@@ -18,14 +18,34 @@ services:
       - ./src:/opt/airflow/src
       - ./local_data/airflow_data:/opt/airflow/data
     environment:
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: sqlite:////opt/airflow/airflow.db
     command: >
       bash -c "
         airflow db init &&
         airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin || true &&
+        airflow connections add training_service --conn-type http --conn-host training-service --conn-port 8000 --conn-schema http || echo 'Connection already exists' &&
         airflow standalone
       "
     depends_on:
       - mlflow
     restart: unless-stopped
+
+  # Cloud Run simulator - mimics your production training service
+  training-service:
+    image: bean-disease-classification-image:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    command: >
+      bash -c "
+        pip install flask gunicorn &&
+        cd /app &&
+        gunicorn --bind 0.0.0.0:8000 --timeout 1800 src.training.api:app
+      "
+    restart: unless-stopped
+    depends_on:
+      - mlflow
