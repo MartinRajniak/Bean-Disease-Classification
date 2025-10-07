@@ -34,6 +34,12 @@ services:
   # Cloud Run simulator - mimics your production training service
   training-service:
     image: bean-disease-classification-image:latest
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+              driver: nvidia
     ports:
       - "8000:8000"
     volumes:

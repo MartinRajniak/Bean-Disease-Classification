@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     apt-get update && \
     apt-get install -y --no-install-recommends build-essential
 
-# Clean up apt caches in the final layer (outside the mount)
+# Clean-up apt caches in the final layer (outside the mount)
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /tmp/requirements.txt
@@ -25,6 +25,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --upgrade pip && \
     pip install --no-cache-dir -r /tmp/requirements.txt
 
+# Create separate layer for code changes, so that rebuilding image with only code changes is fast
 FROM base AS development
 WORKDIR /app
 COPY src/ /app/src/
