@@ -65,6 +65,9 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite-gpu:2.16.1")
     implementation("org.tensorflow:tensorflow-lite-select-tf-ops:2.16.1")
 
+    // Coroutines for async operations
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
     // Testing dependencies
     testImplementation(libs.junit)
     testImplementation("org.mockito:mockito-core:5.7.0")

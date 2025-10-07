@@ -9,14 +9,18 @@ import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
+import java.io.File
+import java.io.FileInputStream
 import java.io.IOException
 import java.nio.MappedByteBuffer
+import java.nio.channels.FileChannel
 
 class BeansDiseaseClassifier(private val context: Context) {
 
     private var interpreter: Interpreter? = null
     private var imageProcessor: ImageProcessor? = null
     private var labels: List<String> = emptyList()
+    private val modelDownloader = ModelDownloader(context)
 
     companion object {
         private const val TAG = "BeansDiseaseClassifier"
@@ -41,7 +45,13 @@ class BeansDiseaseClassifier(private val context: Context) {
 
             loadLabels()
 
+            val modelInfo = modelDownloader.getModelInfo()
             Log.d(TAG, "Model initialized successfully")
+            Log.d(TAG, "Current model version: ${modelInfo.currentVersion}")
+            Log.d(TAG, "Using downloaded model: ${modelInfo.downloadedModelExists}")
+            if (modelInfo.isUpdateAvailable) {
+                Log.d(TAG, "Model update available: ${modelInfo.latestVersion}")
+            }
             true
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing model", e)
@@ -50,8 +60,33 @@ class BeansDiseaseClassifier(private val context: Context) {
     }
 
     private fun loadModelFile(): MappedByteBuffer {
-        return FileUtil.loadMappedFile(context, MODEL_FILENAME)
+        // Try to use downloaded model first
+        val downloadedModelPath = modelDownloader.getCurrentModelPath()
+        return if (downloadedModelPath != null) {
+            Log.d(TAG, "Loading downloaded model from: $downloadedModelPath")
+            loadModelFromFile(File(downloadedModelPath))
+        } else {
+            Log.d(TAG, "Loading bundled model from assets: $MODEL_FILENAME")
+            FileUtil.loadMappedFile(context, MODEL_FILENAME)
+        }
     }
+
+    /**
+     * Load model from filesystem (not assets)
+     */
+    private fun loadModelFromFile(file: File): MappedByteBuffer {
+        FileInputStream(file).use { inputStream ->
+            val fileChannel = inputStream.channel
+            val startOffset = 0L
+            val declaredLength = fileChannel.size()
+            return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
+        }
+    }
+
+    /**
+     * Get the model downloader instance for checking updates
+     */
+    fun getModelDownloader(): ModelDownloader = modelDownloader
 
     private fun loadLabels() {
         try {
