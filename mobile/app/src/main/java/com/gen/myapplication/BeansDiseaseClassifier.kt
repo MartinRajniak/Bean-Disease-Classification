@@ -9,8 +9,11 @@ import org.tensorflow.lite.support.common.FileUtil
 import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
+import java.io.File
+import java.io.FileInputStream
 import java.io.IOException
 import java.nio.MappedByteBuffer
+import java.nio.channels.FileChannel
 
 class BeansDiseaseClassifier(private val context: Context) {
 
@@ -61,10 +64,22 @@ class BeansDiseaseClassifier(private val context: Context) {
         val downloadedModelPath = modelDownloader.getCurrentModelPath()
         return if (downloadedModelPath != null) {
             Log.d(TAG, "Loading downloaded model from: $downloadedModelPath")
-            FileUtil.loadMappedFile(context, downloadedModelPath)
+            loadModelFromFile(File(downloadedModelPath))
         } else {
             Log.d(TAG, "Loading bundled model from assets: $MODEL_FILENAME")
             FileUtil.loadMappedFile(context, MODEL_FILENAME)
+        }
+    }
+
+    /**
+     * Load model from filesystem (not assets)
+     */
+    private fun loadModelFromFile(file: File): MappedByteBuffer {
+        FileInputStream(file).use { inputStream ->
+            val fileChannel = inputStream.channel
+            val startOffset = 0L
+            val declaredLength = fileChannel.size()
+            return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
         }
     }
 
