@@ -11,7 +11,10 @@ A complete end-to-end ML system for bean disease classification using GPU-accele
   - [Access Services](#access-services)
 - [Project Structure](#project-structure)
 - [Usage](#usage)
-  - [Training Models](#training-models)
+  - [Training Options](#training-options)
+  - [Option 1: Local Training](#option-1-local-training-docker--gpu)
+  - [Option 2: Google Colab](#option-2-google-colab-training-free-gpu)
+  - [Option 3: Cloud Training](#option-3-cloud-training-gcp)
   - [Experiment Tracking](#experiment-tracking)
   - [Pipeline Orchestration](#pipeline-orchestration)
 - [Debugging](#debugging)
@@ -108,6 +111,7 @@ bean-disease-classification/
 ├── Dockerfile                         # Training service image (multi-stage)
 ├── requirements.txt                   # Python dependencies
 ├── docker-compose.local.yml          # Local environment configuration
+├── train_on_colab.ipynb              # Google Colab training notebook
 ├── src/                               # Production code (from notebook)
 │   ├── config/
 │   │   └── training_config.py         # Hyperparameters & settings
@@ -129,9 +133,19 @@ bean-disease-classification/
 
 ## Usage
 
-### Training Models
+### Training Options
 
-Train models via REST API:
+You can train the model using three different approaches:
+
+| Option | GPU | Cost | Setup Complexity | MLflow Tracking | Best For |
+|--------|-----|------|------------------|-----------------|----------|
+| **🏠 Local** | Your GPU | $0 | High (Docker + NVIDIA Toolkit) | ✅ Yes | Development & experimentation |
+| **☁️ Colab** | Free T4 | $0 (free tier) | Low (just upload notebook) | ❌ No | Quick training & testing |
+| **🚀 Cloud** | GCP GPU | ~$1-2/hour | Medium (Cloud Run) | ✅ Yes | Production & automation |
+
+### Option 1: Local Training (Docker + GPU)
+
+Train models via REST API on your local machine:
 
 ```bash
 # Start training with custom parameters
@@ -151,7 +165,39 @@ curl -X POST http://localhost:8000/train \
 curl http://localhost:8000/health
 ```
 
-**Training Pipeline:**
+**Advantages:**
+- Free (uses your GPU)
+- Full MLflow experiment tracking
+- Airflow pipeline orchestration
+- Best for iterative development
+
+### Option 2: Google Colab Training (Free GPU)
+
+Perfect for quick experiments without local setup:
+
+1. **Open the notebook**: Upload `train_on_colab.ipynb` to Google Colab
+2. **Enable GPU**: Runtime → Change runtime type → GPU (T4)
+3. **Run all cells**: Runtime → Run all
+4. **Download models**: Get trained Keras + TFLite models
+
+**Advantages:**
+- Free GPU (T4)
+- No setup required
+- Training time: ~15-30 minutes
+- Download models directly
+
+**Limitations:**
+- No MLflow tracking
+- Session timeout after inactivity
+- Limited to 12 hours continuous runtime
+
+### Option 3: Cloud Training (GCP)
+
+Coming soon - cloud-based training with Cloud Run.
+
+---
+
+**Training Pipeline Details:**
 - Data: TensorFlow Datasets (beans) with stratified split
 - Model: Transfer learning (Xception/EfficientNetV2/MobileNet)
 - Training: Phase 1 (frozen base) → Phase 2 (fine-tuning)

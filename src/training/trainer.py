@@ -1,5 +1,3 @@
-import mlflow
-import mlflow.tensorflow
 import tensorflow as tf
 
 # Configure GPU memory growth BEFORE any TensorFlow operations
@@ -19,123 +17,134 @@ from config.training_config import TrainingConfig, BaseModel, Optimizer
 from data.data_loader import BeanDataLoader
 from models.model_builder import BeanModelBuilder
 
-def train_model(config: TrainingConfig):
-    # Connect to MLflow
-    mlflow.set_tracking_uri(config.mlflow_tracking_uri)
-    mlflow.set_experiment(config.experiment_name)
 
-    with mlflow.start_run(run_name=config.run_name):
-        # Log configuration
-        mlflow.log_params(config.to_dict())
-        mlflow.log_param("training_service", "production_api")
+def train_model_core(config: TrainingConfig, output_dir=None):
+    """
+    Core training function without MLflow dependency.
+    Can be used standalone or wrapped with MLflow tracking.
 
-        # Load data
-        print("Loading dataset...")
-        data_loader = BeanDataLoader(config)
-        ds_train, ds_valid, ds_test = data_loader.load_data()
+    Args:
+        config: Training configuration
+        output_dir: Optional directory to save models (if None, models not saved to disk)
 
-        # Prepare data pipeline
-        print("Preparing data pipeline...")
-        ds_train, ds_valid, ds_test = prepare_data_pipeline(
-            ds_train, ds_valid, ds_test, config
-        )
+    Returns:
+        dict with training results including model, tflite_model, and metrics
+    """
+    # Load data
+    print("Loading dataset...")
+    data_loader = BeanDataLoader(config)
+    ds_train, ds_valid, ds_test = data_loader.load_data()
 
-        # Build model
-        print("Building model...")
-        model_builder = BeanModelBuilder(config)
-        model, base_model = model_builder.build_model()
+    # Prepare data pipeline
+    print("Preparing data pipeline...")
+    ds_train, ds_valid, ds_test = prepare_data_pipeline(
+        ds_train, ds_valid, ds_test, config
+    )
 
-        print("Model architecture:")
-        model.summary()
+    # Build model
+    print("Building model...")
+    model_builder = BeanModelBuilder(config)
+    model, base_model = model_builder.build_model()
 
-        # Phase 1: Initial training
-        print("Phase 1: Initial training (frozen base model)...")
-        optimizer = get_optimizer(config, phase="pretrain")
+    print("Model architecture:")
+    model.summary()
+
+    # Phase 1: Initial training
+    print("Phase 1: Initial training (frozen base model)...")
+    optimizer = get_optimizer(config, phase="pretrain")
+    model.compile(
+        loss="sparse_categorical_crossentropy",
+        optimizer=optimizer,
+        metrics=["accuracy"],
+    )
+
+    callbacks = get_callbacks(config, phase="pretrain")
+    history_pretrain = model.fit(
+        ds_train,
+        validation_data=ds_valid,
+        epochs=config.epochs_pretrain,
+        callbacks=callbacks,
+        verbose=1,
+    )
+
+    # Phase 2: Fine-tuning
+    if config.epochs_finetune > 0:
+        print("Phase 2: Fine-tuning (unfrozen layers)...")
+        model_builder.prepare_for_finetuning(model, base_model)
+
+        optimizer = get_optimizer(config, phase="finetune")
         model.compile(
             loss="sparse_categorical_crossentropy",
             optimizer=optimizer,
             metrics=["accuracy"],
         )
 
-        callbacks = get_callbacks(config, phase="pretrain")
-        history_pretrain = model.fit(
+        callbacks = get_callbacks(config, phase="finetune")
+        history_finetune = model.fit(
             ds_train,
             validation_data=ds_valid,
-            epochs=config.epochs_pretrain,
+            epochs=config.epochs_finetune,
             callbacks=callbacks,
             verbose=1,
         )
 
-        # Phase 2: Fine-tuning
-        if config.epochs_finetune > 0:
-            print("Phase 2: Fine-tuning (unfrozen layers)...")
-            model_builder.prepare_for_finetuning(model, base_model)
+        # Combine histories
+        final_accuracy = history_finetune.history["accuracy"][-1]
+        final_val_accuracy = history_finetune.history["val_accuracy"][-1]
+    else:
+        final_accuracy = history_pretrain.history["accuracy"][-1]
+        final_val_accuracy = history_pretrain.history["val_accuracy"][-1]
 
-            optimizer = get_optimizer(config, phase="finetune")
-            model.compile(
-                loss="sparse_categorical_crossentropy",
-                optimizer=optimizer,
-                metrics=["accuracy"],
-            )
+    # Evaluate on test set
+    print("Evaluating on test set...")
+    test_loss, test_accuracy = model.evaluate(ds_test, verbose=0)
 
-            callbacks = get_callbacks(config, phase="finetune")
-            history_finetune = model.fit(
-                ds_train,
-                validation_data=ds_valid,
-                epochs=config.epochs_finetune,
-                callbacks=callbacks,
-                verbose=1,
-            )
+    # Prepare metrics
+    final_metrics = {
+        "final_train_accuracy": float(final_accuracy),
+        "final_val_accuracy": float(final_val_accuracy),
+        "test_accuracy": float(test_accuracy),
+        "test_loss": float(test_loss),
+    }
 
-            # Combine histories
-            final_accuracy = history_finetune.history["accuracy"][-1]
-            final_val_accuracy = history_finetune.history["val_accuracy"][-1]
-        else:
-            final_accuracy = history_pretrain.history["accuracy"][-1]
-            final_val_accuracy = history_pretrain.history["val_accuracy"][-1]
+    # Convert to TFLite
+    print("Converting to TFLite...")
+    tflite_model = convert_to_tflite(model)
+    model_size_mb = len(tflite_model) / (1024 * 1024)
 
-        # Evaluate on test set
-        print("Evaluating on test set...")
-        test_loss, test_accuracy = model.evaluate(ds_test, verbose=0)
+    # Save models to disk if output_dir is provided
+    if output_dir:
+        import os
+        os.makedirs(output_dir, exist_ok=True)
 
-        # Log final metrics
-        final_metrics = {
-            "final_train_accuracy": float(final_accuracy),
-            "final_val_accuracy": float(final_val_accuracy),
-            "test_accuracy": float(test_accuracy),
-            "test_loss": float(test_loss),
-        }
-        mlflow.log_metrics(final_metrics)
-
-        # Save model to MLflow
-        print("Saving model to MLflow...")
-        mlflow.tensorflow.log_model(model, "model")
-
-        # Convert to TFLite
-        print("Converting to TFLite...")
-        tflite_model = convert_to_tflite(model)
+        # Save Keras model
+        keras_path = f"{output_dir}/bean_disease_model.keras"
+        model.save(keras_path)
+        print(f"Keras model saved to: {keras_path}")
 
         # Save TFLite model
-        tflite_path = "/tmp/bean_disease_model.tflite"
+        tflite_path = f"{output_dir}/bean_disease_model.tflite"
         with open(tflite_path, "wb") as f:
             f.write(tflite_model)
+        print(f"TFLite model saved to: {tflite_path}")
 
-        mlflow.log_artifact(tflite_path, "tflite_model")
+    result = {
+        "status": "success",
+        "model": model,
+        "tflite_model": tflite_model,
+        "metrics": final_metrics,
+        "tflite_size_mb": model_size_mb,
+        "training_config": config.to_dict(),
+        "message": f"Training completed! Test accuracy: {test_accuracy:.4f}",
+    }
 
-        model_size_mb = len(tflite_model) / (1024 * 1024)
-        mlflow.log_metric("tflite_size_mb", model_size_mb)
+    print(f"Training completed successfully!")
+    print(f"  Test accuracy: {test_accuracy:.4f}")
+    print(f"  Test loss: {test_loss:.4f}")
+    print(f"  TFLite size: {model_size_mb:.2f} MB")
 
-        result = {
-            "status": "success",
-            "mlflow_run_id": mlflow.active_run().info.run_id,
-            "metrics": final_metrics,
-            "tflite_size_mb": model_size_mb,
-            "training_config": config.to_dict(),
-            "message": f"Training completed! Test accuracy: {test_accuracy:.4f}",
-        }
+    return result
 
-        print(f"Training completed successfully: {result}")
-        return result
 
 def prepare_data_pipeline(ds_train, ds_valid, ds_test, config):
     """Prepare optimized data pipeline"""
