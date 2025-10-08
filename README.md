@@ -2,25 +2,29 @@
 A complete end-to-end ML system for bean disease classification using GPU-accelerated training, MLflow tracking, and Airflow orchestration.
 
 ## Table of Contents
+- [Getting Started](#getting-started)
 - [Features](#features)
-- [System Architecture](#system-architecture)
-- [Prerequisites](#prerequisites)
-- [Quick Start](#quick-start)
-  - [Build the Training Image](#build-the-training-image)
-  - [Start the Environment](#start-the-environment)
-  - [Access Services](#access-services)
+- [Notebooks](#notebooks)
+- [Training Options](#training-options)
+- [Local Development Setup](#local-development-setup)
 - [Project Structure](#project-structure)
-- [Usage](#usage)
-  - [Training Options](#training-options)
-  - [Option 1: Local Training](#option-1-local-training-docker--gpu)
-  - [Option 2: Google Colab](#option-2-google-colab-training-free-gpu)
-  - [Option 3: Cloud Training](#option-3-cloud-training-gcp)
-  - [Experiment Tracking](#experiment-tracking)
-  - [Pipeline Orchestration](#pipeline-orchestration)
+- [Experiment Tracking & Orchestration](#experiment-tracking--orchestration)
 - [Debugging](#debugging)
 - [Technology Stack](#technology-stack)
-- [Roadmap](#roadmap)
 - [Troubleshooting](#troubleshooting)
+
+## Getting Started
+
+**New to this project?** Follow this path:
+
+1. **Learn**: Read [`bean_disease_classification.ipynb`](bean_disease_classification.ipynb) to understand the problem and ML approach
+2. **Train**: Upload [`train_on_colab.ipynb`](train_on_colab.ipynb) to Google Colab for free GPU training (~15-30 min)
+3. **Compare**: Use [`test_model_performance.ipynb`](test_model_performance.ipynb) to evaluate different models
+4. **Production**: Set up [local Docker environment](#local-development-setup) for MLflow tracking and Airflow orchestration
+
+**Just want to train quickly?** → Use [`train_on_colab.ipynb`](train_on_colab.ipynb) (no setup required)
+
+**Building production pipelines?** → Set up [local environment](#local-development-setup) for REST API + MLflow + Airflow
 
 ## Features
 
@@ -38,71 +42,107 @@ A complete end-to-end ML system for bean disease classification using GPU-accele
 - **Data Pipeline**: Stratified splitting with TensorFlow Datasets
 - **Persistent Storage**: All experiments and artifacts survive container restarts
 
-## System Architecture
+## Notebooks
 
-**Services:**
-- **MLflow** (http://localhost:5000) - Experiment tracking and model registry
-- **Airflow** (http://localhost:8080) - Pipeline orchestration (admin/admin)
-- **Training Service** (http://localhost:8000) - GPU-accelerated training API
+### 📚 `bean_disease_classification.ipynb` - **Start Here**
 
-**Storage:**
-- `./local_data/mlflow/` - Experiments, models, artifacts
-- `./local_data/airflow_data/` - Airflow metadata
-- `./dags/` - Pipeline definitions (version controlled)
+Complete tutorial explaining the problem, data, and training methodology. Covers:
+- Why bean disease detection matters for African food security
+- Data exploration and preprocessing
+- Transfer learning with two-phase training (freeze → fine-tune)
+- Model evaluation and mobile deployment
 
-## Prerequisites
+**Use this notebook to**: Understand the problem domain and ML approach before training models.
+
+### 🔬 `test_model_performance.ipynb`
+
+Compare trained models across architectures (Xception, MobileNet) and formats (Keras, TFLite). Includes accuracy, F1-score, inference time, model size, and degradation analysis.
+
+**Example**: MobileNet TFLite is 91.5% smaller and 2.15x faster with only 6.49% accuracy loss vs Xception.
+
+**Use this notebook to**: Choose the best model for your deployment constraints (accuracy vs size vs speed).
+
+## Training Options
+
+| Method | GPU | Cost | Setup | MLflow | Best For |
+|--------|-----|------|-------|--------|----------|
+| **Local (REST API)** | Your GPU | Free | Docker + NVIDIA | ✅ Yes | Production pipelines & automation |
+| **Colab (`train_on_colab.ipynb`)** | Free T4 | Free | None | ❌ No | Quick experiments without local GPU |
+| **Cloud (GCP)** | Cloud GPU | ~$1-2/hr | Medium | ✅ Yes | Production training at scale |
+
+### Local Training via REST API
+
+Train using the GPU-accelerated Flask API (requires [local setup](#local-development-setup)):
+
+```bash
+curl -X POST http://localhost:8000/train \
+  -H "Content-Type: application/json" \
+  -d '{
+    "epochs_pretrain": 5,
+    "epochs_finetune": 10,
+    "initial_lr": 0.1,
+    "finetune_lr": 0.01,
+    "batch_size": 16,
+    "experiment_name": "bean_disease_api",
+    "run_name": "training_20250107_001"
+  }'
+```
+
+Results tracked in MLflow UI at http://localhost:5000
+
+### Google Colab Training
+
+Upload `train_on_colab.ipynb` to Colab, enable GPU (Runtime → Change runtime type → GPU), and run all cells. Training takes ~15-30 minutes and produces downloadable Keras + TFLite models.
+
+**Note**: Uses same `train_model_core()` code as local/cloud for consistency.
+
+### Cloud Training (GCP)
+
+Coming soon.
+
+## Local Development Setup
+
+### Prerequisites
 
 - Docker and Docker Compose
-- **NVIDIA Container Toolkit** (required for GPU support)
-  - Install: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+- **NVIDIA Container Toolkit** - Install: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
 - NVIDIA GPU with CUDA support
 - ~5GB free disk space
 - Ports 5000, 8000, 8080 available
 
-## Quick Start
-
-### Build the Training Image
+### Build & Start
 
 ```bash
-# Using build script (recommended)
+# Build training image (recommended method)
 ./scripts/docker_build.sh
 
-# Or manually
-docker build -t bean-disease-classification-image:latest .
-```
-
-**Build Optimization**: The Dockerfile uses a two-stage build:
-1. **Base layer**: Python dependencies (~10 min, cached until requirements.txt changes)
-2. **Code layer**: Source code (~30 sec, rebuilt on code changes)
-
-### Start the Environment
-
-```bash
-# Start all services (recommended - includes health checks)
+# Start all services
 ./scripts/start_local.sh
-
-# Or use Docker Compose directly
-docker-compose -f docker-compose.local.yml up -d
 
 # Check status
 docker-compose -f docker-compose.local.yml ps
+```
 
+**Build optimization**: Dependencies cached (~10 min), code rebuilds in ~30 sec.
+
+### Services
+
+Access the running services:
+- **Training API**: http://localhost:8000/health
+- **MLflow UI**: http://localhost:5000
+- **Airflow UI**: http://localhost:8080 (admin/admin)
+
+### Stop & Cleanup
+
+```bash
 # Stop services (data persists)
 ./scripts/stop_local.sh
-# or
-docker-compose -f docker-compose.local.yml down
 
 # Stop and remove all data
 docker-compose -f docker-compose.local.yml down -v
 ```
 
-**Note**: The `--gpus all` flag is configured in docker-compose.yml for GPU access.
-
-### Access Services
-
-- **Training API**: http://localhost:8000/health
-- **MLflow UI**: http://localhost:5000
-- **Airflow UI**: http://localhost:8080 (username: `admin`, password: `admin`)
+**Data storage**: `./local_data/mlflow/` (experiments), `./local_data/airflow_data/` (metadata), `./dags/` (pipelines)
 
 ## Project Structure
 
@@ -111,7 +151,9 @@ bean-disease-classification/
 ├── Dockerfile                         # Training service image (multi-stage)
 ├── requirements.txt                   # Python dependencies
 ├── docker-compose.local.yml          # Local environment configuration
+├── bean_disease_classification.ipynb # Main tutorial notebook (start here)
 ├── train_on_colab.ipynb              # Google Colab training notebook
+├── test_model_performance.ipynb      # Model comparison and evaluation
 ├── src/                               # Production code (from notebook)
 │   ├── config/
 │   │   └── training_config.py         # Hyperparameters & settings
@@ -131,79 +173,9 @@ bean-disease-classification/
 └── local_data/                        # Persistent data (gitignored)
 ```
 
-## Usage
+## Experiment Tracking & Orchestration
 
-### Training Options
-
-You can train the model using three different approaches:
-
-| Option | GPU | Cost | Setup Complexity | MLflow Tracking | Best For |
-|--------|-----|------|------------------|-----------------|----------|
-| **🏠 Local** | Your GPU | $0 | High (Docker + NVIDIA Toolkit) | ✅ Yes | Development & experimentation |
-| **☁️ Colab** | Free T4 | $0 (free tier) | Low (just upload notebook) | ❌ No | Quick training & testing |
-| **🚀 Cloud** | GCP GPU | ~$1-2/hour | Medium (Cloud Run) | ✅ Yes | Production & automation |
-
-### Option 1: Local Training (Docker + GPU)
-
-Train models via REST API on your local machine:
-
-```bash
-# Start training with custom parameters
-curl -X POST http://localhost:8000/train \
-  -H "Content-Type: application/json" \
-  -d '{
-    "epochs_pretrain": 5,
-    "epochs_finetune": 10,
-    "initial_lr": 0.1,
-    "finetune_lr": 0.01,
-    "batch_size": 16,
-    "experiment_name": "bean_disease_api",
-    "run_name": "training_20250107_001"
-  }'
-
-# Check service health
-curl http://localhost:8000/health
-```
-
-**Advantages:**
-- Free (uses your GPU)
-- Full MLflow experiment tracking
-- Airflow pipeline orchestration
-- Best for iterative development
-
-### Option 2: Google Colab Training (Free GPU)
-
-Perfect for quick experiments without local setup:
-
-1. **Open the notebook**: Upload `train_on_colab.ipynb` to Google Colab
-2. **Enable GPU**: Runtime → Change runtime type → GPU (T4)
-3. **Run all cells**: Runtime → Run all
-4. **Download models**: Get trained Keras + TFLite models
-
-**Advantages:**
-- Free GPU (T4)
-- No setup required
-- Training time: ~15-30 minutes
-- Download models directly
-
-**Limitations:**
-- No MLflow tracking
-- Session timeout after inactivity
-- Limited to 12 hours continuous runtime
-
-### Option 3: Cloud Training (GCP)
-
-Coming soon - cloud-based training with Cloud Run.
-
----
-
-**Training Pipeline Details:**
-- Data: TensorFlow Datasets (beans) with stratified split
-- Model: Transfer learning (Xception/EfficientNetV2/MobileNet)
-- Training: Phase 1 (frozen base) → Phase 2 (fine-tuning)
-- Output: Keras model + TFLite for mobile
-
-### Experiment Tracking
+### MLflow Experiment Tracking
 
 ```python
 import mlflow
@@ -219,11 +191,9 @@ with mlflow.start_run():
 
 View experiments at http://localhost:5000
 
-### Pipeline Orchestration
+### Airflow Pipeline Orchestration
 
-- Create DAG files in `./dags/`
-- Trigger and monitor runs in Airflow UI
-- Training service pre-configured as HTTP connection
+Create DAG files in `./dags/` to automate training workflows. Training service is pre-configured as an HTTP connection for triggering jobs from Airflow.
 
 ## Debugging
 
@@ -273,27 +243,6 @@ docker run --gpus all --rm -it \
 - Two-phase training (freeze → fine-tune)
 - TFLite conversion for mobile deployment
 
-## Roadmap
-
-### Phase 1: ML Training Pipeline ✅
-- ✅ Local GPU-accelerated environment
-- ✅ MLflow experiment tracking
-- ✅ Airflow orchestration
-- ✅ Production-ready code structure
-- ✅ TFLite mobile deployment
-
-### Phase 2: Automation & Optimization (Current)
-- [ ] Automated training DAG
-- [ ] Hyperparameter optimization
-- [ ] Model comparison dashboard
-- [ ] CI/CD pipeline
-
-### Phase 3: Production Deployment
-- [ ] Cloud training (GCP Cloud Run)
-- [ ] Model serving API
-- [ ] Android app integration
-- [ ] A/B testing & monitoring
-
 ## Troubleshooting
 
 ### GPU Issues
@@ -328,8 +277,3 @@ nvidia-smi
 ./scripts/docker_build.sh
 docker-compose -f docker-compose.local.yml up -d --force-recreate training-service
 ```
-
----
-
-**Status**: Production Training Pipeline Ready
-**Next**: Implement automated training DAG in Airflow
