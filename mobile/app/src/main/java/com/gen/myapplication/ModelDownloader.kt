@@ -2,7 +2,11 @@ package com.gen.myapplication
 
 import android.content.Context
 import android.util.Log
+import io.ktor.client.engine.okhttp.OkHttp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -14,7 +18,10 @@ import java.net.URL
  *
  * Model versions are tracked and updated automatically when new versions are available.
  */
-class ModelDownloader(private val context: Context) {
+class ModelDownloader(
+    private val context: Context,
+    private val gitHubApi: GitHubApi = GitHubApi(OkHttp.create())
+) {
 
     companion object {
         private const val TAG = "ModelDownloader"
@@ -24,16 +31,16 @@ class ModelDownloader(private val context: Context) {
         private const val MODEL_FILENAME = "bean_disease_model.tflite"
 
         // Default model version (bundled in app)
-        private const val DEFAULT_VERSION = "v0.0.0-bundled"
-
-        // Current release version to download
-        private const val LATEST_VERSION = "v.0.1.0-mobile-net"
+        private const val DEFAULT_VERSION = "v0.1.0-bundled"
 
         // Model storage
         private const val MODELS_DIR = "models"
         private const val CURRENT_MODEL_FILE = "current_model.tflite"
         private const val VERSION_FILE = "model_version.txt"
     }
+
+    private val _latestVersion = MutableStateFlow<Result<String>?>(null)
+    val latestVersion: StateFlow<Result<String>?> = _latestVersion.asStateFlow()
 
     private val modelsDir: File by lazy {
         File(context.filesDir, MODELS_DIR).also { it.mkdirs() }
@@ -59,14 +66,6 @@ class ModelDownloader(private val context: Context) {
     }
 
     /**
-     * Check if a model update is available
-     */
-    fun isUpdateAvailable(): Boolean {
-        val currentVersion = getCurrentVersion()
-        return currentVersion != LATEST_VERSION
-    }
-
-    /**
      * Get the path to the current model file
      * Returns null if no downloaded model exists (should use bundled model)
      */
@@ -79,16 +78,25 @@ class ModelDownloader(private val context: Context) {
         }
     }
 
+    suspend fun updateLatestVersionInfo() {
+        _latestVersion.value = gitHubApi.fetchLatestVersionInfo()
+    }
+
+    fun isUpdateAvailable(latestVersion: String): Boolean {
+        val currentVersion = getCurrentVersion()
+        return currentVersion != latestVersion
+    }
+
     /**
      * Download the latest model from GitHub releases
      *
      * @return true if download successful, false otherwise
      */
-    suspend fun downloadLatestModel(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun downloadModel(modelVersion: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "Starting download of model version: $LATEST_VERSION")
+            Log.d(TAG, "Starting download of model version: $modelVersion")
 
-            val url = URL(getModelUrl(LATEST_VERSION))
+            val url = URL(getModelUrl(modelVersion))
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
             connection.connectTimeout = 30000
@@ -153,7 +161,7 @@ class ModelDownloader(private val context: Context) {
 
             // Update version file
             val versionFile = File(modelsDir, VERSION_FILE)
-            versionFile.writeText(LATEST_VERSION)
+            versionFile.writeText(modelVersion)
 
             Log.d(TAG, "Model successfully downloaded and saved: ${finalFile.absolutePath}")
             true
@@ -186,8 +194,6 @@ class ModelDownloader(private val context: Context) {
      */
     data class ModelInfo(
         val currentVersion: String,
-        val latestVersion: String,
-        val isUpdateAvailable: Boolean,
         val downloadedModelExists: Boolean,
         val downloadedModelSize: Long? = null
     )
@@ -196,8 +202,6 @@ class ModelDownloader(private val context: Context) {
         val modelFile = File(modelsDir, CURRENT_MODEL_FILE)
         return ModelInfo(
             currentVersion = getCurrentVersion(),
-            latestVersion = LATEST_VERSION,
-            isUpdateAvailable = isUpdateAvailable(),
             downloadedModelExists = modelFile.exists(),
             downloadedModelSize = if (modelFile.exists()) modelFile.length() else null
         )

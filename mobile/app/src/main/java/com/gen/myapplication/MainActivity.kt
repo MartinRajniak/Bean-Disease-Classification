@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -24,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,7 +58,11 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun CameraScreen() {
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
-    var classificationResult by remember { mutableStateOf<BeansDiseaseClassifier.ClassificationResult?>(null) }
+    var classificationResult by remember {
+        mutableStateOf<BeansDiseaseClassifier.ClassificationResult?>(
+            null
+        )
+    }
     var showModelUpdateDialog by remember { mutableStateOf(false) }
 
     when {
@@ -97,11 +101,13 @@ fun CameraScreen() {
                 }
             }
         }
+
         cameraPermissionState.status.shouldShowRationale -> {
             PermissionRationaleContent {
                 cameraPermissionState.launchPermissionRequest()
             }
         }
+
         else -> {
             LaunchedEffect(Unit) {
                 cameraPermissionState.launchPermissionRequest()
@@ -147,7 +153,9 @@ private fun ClassificationOverlay(
             )
 
             Text(
-                text = "Disease: ${result.label.replace("_", " ").replaceFirstChar { it.uppercase() }}",
+                text = "Disease: ${
+                    result.label.replace("_", " ").replaceFirstChar { it.uppercase() }
+                }",
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(top = 8.dp)
             )
@@ -171,8 +179,13 @@ private fun ModelUpdateDialog(
     val coroutineScope = rememberCoroutineScope()
 
     var modelInfo by remember { mutableStateOf(modelDownloader.getModelInfo()) }
+    val latestVersionState: Result<String>? by modelDownloader.latestVersion.collectAsState()
     var isDownloading by remember { mutableStateOf(false) }
     var downloadStatus by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(modelDownloader) {
+        modelDownloader.updateLatestVersionInfo()
+    }
 
     Box(
         modifier = Modifier
@@ -204,7 +217,7 @@ private fun ModelUpdateDialog(
                 )
 
                 Text(
-                    text = "Latest Version: ${modelInfo.latestVersion}",
+                    text = "Latest Version: ${latestVersionState?.getOrNull() ?: "Fetching..."}",
                     style = MaterialTheme.typography.bodyMedium
                 )
 
@@ -232,18 +245,33 @@ private fun ModelUpdateDialog(
                         textAlign = TextAlign.Center,
                         color = if (downloadStatus!!.contains("success")) Color(0xFF4CAF50) else Color.Red
                     )
-                } else if (modelInfo.isUpdateAvailable) {
-                    Text(
-                        text = "A new model version is available!",
-                        style = MaterialTheme.typography.bodyMedium,
-                        textAlign = TextAlign.Center
-                    )
                 } else {
-                    Text(
-                        text = "✓ You have the latest model",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color(0xFF4CAF50)
-                    )
+                    val latestVersionResult = latestVersionState
+                    if (latestVersionResult == null) {
+                        Text(
+                            text = "Latest model version is being fetched...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center
+                        )
+                    } else {
+                        val isSuccess = latestVersionResult.isSuccess
+                        val latestVersion = latestVersionResult.getOrNull()
+                        if (isSuccess && latestVersion != null) {
+                            if (!modelDownloader.isUpdateAvailable(latestVersion)) {
+                                Text(
+                                    text = "✓ You have the latest model",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color(0xFF4CAF50)
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = "Latest model version could not be fetched!",
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -252,13 +280,14 @@ private fun ModelUpdateDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    if (modelInfo.isUpdateAvailable && !isDownloading) {
+                    val latestVersion = latestVersionState?.getOrNull()
+                    if (latestVersion?.let { modelDownloader.isUpdateAvailable(it) } == true && !isDownloading) {
                         Button(
                             onClick = {
                                 isDownloading = true
                                 downloadStatus = null
                                 coroutineScope.launch {
-                                    val success = modelDownloader.downloadLatestModel()
+                                    val success = modelDownloader.downloadModel(latestVersion)
                                     isDownloading = false
                                     downloadStatus = if (success) {
                                         modelInfo = modelDownloader.getModelInfo()
