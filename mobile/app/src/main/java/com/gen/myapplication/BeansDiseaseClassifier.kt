@@ -15,12 +15,14 @@ import java.io.IOException
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 
-class BeansDiseaseClassifier(private val context: Context) {
+class BeansDiseaseClassifier(
+    private val context: Context,
+    private val modelDownloader: ModelDownloader
+) {
 
     private var interpreter: Interpreter? = null
     private var imageProcessor: ImageProcessor? = null
     private var labels: List<String> = emptyList()
-    private val modelDownloader = ModelDownloader(context)
 
     companion object {
         private const val TAG = "BeansDiseaseClassifier"
