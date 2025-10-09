@@ -15,12 +15,14 @@ import java.io.IOException
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 
-class BeansDiseaseClassifier(private val context: Context) {
+class BeansDiseaseClassifier(
+    private val context: Context,
+    private val modelDownloader: ModelDownloader
+) {
 
     private var interpreter: Interpreter? = null
     private var imageProcessor: ImageProcessor? = null
     private var labels: List<String> = emptyList()
-    private val modelDownloader = ModelDownloader(context)
 
     companion object {
         private const val TAG = "BeansDiseaseClassifier"
@@ -49,9 +51,6 @@ class BeansDiseaseClassifier(private val context: Context) {
             Log.d(TAG, "Model initialized successfully")
             Log.d(TAG, "Current model version: ${modelInfo.currentVersion}")
             Log.d(TAG, "Using downloaded model: ${modelInfo.downloadedModelExists}")
-            if (modelInfo.isUpdateAvailable) {
-                Log.d(TAG, "Model update available: ${modelInfo.latestVersion}")
-            }
             true
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing model", e)
@@ -83,17 +82,12 @@ class BeansDiseaseClassifier(private val context: Context) {
         }
     }
 
-    /**
-     * Get the model downloader instance for checking updates
-     */
-    fun getModelDownloader(): ModelDownloader = modelDownloader
-
     private fun loadLabels() {
         try {
             labels = FileUtil.loadLabels(context, LABELS_FILENAME)
             Log.d(TAG, "Loaded ${labels.size} labels")
         } catch (e: IOException) {
-            Log.w(TAG, "Labels file not found, using default labels")
+            Log.w(TAG, "Labels file not found, using default labels", e)
             // Default labels for bean diseases (common classifications)
             labels = listOf(
                 "angular_leaf_spot",
@@ -109,31 +103,20 @@ class BeansDiseaseClassifier(private val context: Context) {
 
         return try {
             val startTime = System.currentTimeMillis()
-            Log.d(TAG, "🚀 Starting classification for image ${bitmap.width}x${bitmap.height}")
 
             // Step 1: Convert to TensorImage
-            val step1Start = System.currentTimeMillis()
             val tensorImage = TensorImage.fromBitmap(bitmap)
-            val step1End = System.currentTimeMillis()
-            Log.d(TAG, "⏱️ Step 1 - TensorImage creation: ${step1End - step1Start}ms")
 
             // Step 2: Resize image
-            val step2Start = System.currentTimeMillis()
             val resizedImage = imageProcessor.process(tensorImage)
             val resizedBitmap = resizedImage.bitmap
-            val step2End = System.currentTimeMillis()
-            Log.d(TAG, "⏱️ Step 2 - Image resize: ${step2End - step2Start}ms")
 
             // Step 3: Create input array and extract pixels
-            val step3Start = System.currentTimeMillis()
             val input = Array(1) { Array(INPUT_SIZE) { Array(INPUT_SIZE) { FloatArray(3) } } }
             val pixels = IntArray(INPUT_SIZE * INPUT_SIZE)
             resizedBitmap.getPixels(pixels, 0, INPUT_SIZE, 0, 0, INPUT_SIZE, INPUT_SIZE)
-            val step3End = System.currentTimeMillis()
-            Log.d(TAG, "⏱️ Step 3 - Array creation & pixel extraction: ${step3End - step3Start}ms")
 
             // Step 4: Preprocessing (pixel normalization)
-            val step4Start = System.currentTimeMillis()
             for (i in 0 until INPUT_SIZE) {
                 for (j in 0 until INPUT_SIZE) {
                     val pixelValue = pixels[i * INPUT_SIZE + j]
@@ -149,15 +132,10 @@ class BeansDiseaseClassifier(private val context: Context) {
                     input[0][i][j][2] = (blue / 127.5f) - 1.0f    // Blue channel
                 }
             }
-            val step4End = System.currentTimeMillis()
-            Log.d(TAG, "⏱️ Step 4 - Pixel preprocessing: ${step4End - step4Start}ms")
 
             // Step 5: Model inference
-            val step5Start = System.currentTimeMillis()
             val outputArray = Array(1) { FloatArray(labels.size) }
             interpreter.run(input, outputArray)
-            val step5End = System.currentTimeMillis()
-            Log.d(TAG, "⏱️ Step 5 - Model inference: ${step5End - step5Start}ms")
 
             // Process results
             val results = mutableMapOf<String, Float>()
@@ -168,8 +146,12 @@ class BeansDiseaseClassifier(private val context: Context) {
             // Find the top result
             val topResult = results.maxByOrNull { it.value }
 
+
             topResult?.let {
-                Log.d(TAG, "Classification result: ${it.key} with confidence ${it.value}")
+                Log.d(TAG, "Classification result" +
+                        " (${System.currentTimeMillis() - startTime}ms):" +
+                        " ${it.key}" +
+                        " with confidence ${it.value}")
                 ClassificationResult(
                     label = it.key,
                     confidence = it.value,

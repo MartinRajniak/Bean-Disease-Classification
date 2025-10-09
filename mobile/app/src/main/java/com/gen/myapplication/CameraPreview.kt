@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import io.ktor.client.engine.okhttp.OkHttp
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.util.concurrent.Executors
@@ -37,7 +38,9 @@ fun CameraPreview(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember { PreviewView(context) }
-    val classifier = remember { BeansDiseaseClassifier(context) }
+    val gitHubApi = remember { GitHubApi(OkHttp.create()) }
+    val modelDownloader = remember { ModelDownloader(context, gitHubApi) }
+    val classifier = remember { BeansDiseaseClassifier(context, modelDownloader) }
 
     LaunchedEffect(previewView) {
         classifier.initialize()
