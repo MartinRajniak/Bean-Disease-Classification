@@ -1,11 +1,12 @@
 # Bean Disease Classification
-A complete end-to-end ML system for bean disease classification using GPU-accelerated training, MLflow tracking, and Airflow orchestration.
+
+End-to-end ML pipeline for bean disease classification with GPU-accelerated training, experiment tracking, workflow orchestration, and mobile deployment.
 
 ## Table of Contents
 - [Getting Started](#getting-started)
-- [Features](#features)
-- [Notebooks](#notebooks)
 - [Training Options](#training-options)
+- [Notebooks](#notebooks)
+- [Mobile App](#mobile-app)
 - [Local Development Setup](#local-development-setup)
 - [Project Structure](#project-structure)
 - [Experiment Tracking & Orchestration](#experiment-tracking--orchestration)
@@ -15,16 +16,19 @@ A complete end-to-end ML system for bean disease classification using GPU-accele
 
 ## Getting Started
 
-**New to this project?** Follow this path:
+**Choose your training approach:**
 
-1. **Learn**: Read [`bean_disease_classification.ipynb`](bean_disease_classification.ipynb) to understand the problem and ML approach
-2. **Train**: Upload [`train_on_colab.ipynb`](train_on_colab.ipynb) to Google Colab for free GPU training (~15-30 min)
-3. **Compare**: Use [`test_model_performance.ipynb`](test_model_performance.ipynb) to evaluate different models
-4. **Production**: Set up [local Docker environment](#local-development-setup) for MLflow tracking and Airflow orchestration
+| Your Situation | Recommended Method | Details |
+|----------------|-------------------|---------|
+| No GPU, want automation | [Modal](#modal-cloud-training) | $30/month free credits, CLI-based |
+| No GPU, manual experiments | [Colab](#google-colab-training) | Free, browser-based |
+| Have local GPU | [Local Docker](#local-development-setup) | Free, full MLflow/Airflow stack |
 
-**Just want to train quickly?** → Use [`train_on_colab.ipynb`](train_on_colab.ipynb) (no setup required)
-
-**Building production pipelines?** → Set up [local environment](#local-development-setup) for REST API + MLflow + Airflow
+**Learning path:**
+1. Read [`bean_disease_classification.ipynb`](bean_disease_classification.ipynb) - Understand the ML approach
+2. Choose a training method above - Train your first model
+3. Use [`test_model_performance.ipynb`](test_model_performance.ipynb) - Compare model performance
+4. Try the [Mobile App](#mobile-app) - Test on real images
 
 ## Features
 
@@ -46,29 +50,45 @@ A complete end-to-end ML system for bean disease classification using GPU-accele
 
 ### 📚 `bean_disease_classification.ipynb` - **Start Here**
 
-Complete tutorial explaining the problem, data, and training methodology. Covers:
+Complete tutorial explaining the problem, data, and training methodology:
 - Why bean disease detection matters for African food security
 - Data exploration and preprocessing
 - Transfer learning with two-phase training (freeze → fine-tune)
 - Model evaluation and mobile deployment
 
-**Use this notebook to**: Understand the problem domain and ML approach before training models.
+**Use for**: Understanding the ML approach and problem domain.
+
+### 🚀 `train_on_colab.ipynb`
+
+Google Colab notebook for training models on free cloud GPUs:
+- No local setup required - runs entirely in browser
+- Same training code as production (`train_model_core()`)
+- Configurable hyperparameters (model, epochs, learning rates)
+- Downloads trained Keras + TFLite models
+
+**Use for**: Quick training without local GPU (Runtime → GPU → Run all).
 
 ### 🔬 `test_model_performance.ipynb`
 
-Compare trained models across architectures (Xception, MobileNet) and formats (Keras, TFLite). Includes accuracy, F1-score, inference time, model size, and degradation analysis.
+Benchmark and compare trained models:
+- Accuracy, F1-score across architectures (Xception, MobileNet, etc.)
+- Inference time and model size analysis
+- TFLite conversion degradation metrics
 
 **Example**: MobileNet TFLite is 91.5% smaller and 2.15x faster with only 6.49% accuracy loss vs Xception.
 
-**Use this notebook to**: Choose the best model for your deployment constraints (accuracy vs size vs speed).
+**Use for**: Choosing optimal model for deployment constraints.
 
 ## Training Options
 
-| Method | GPU | Cost | Setup | MLflow | Best For |
-|--------|-----|------|-------|--------|----------|
-| **Local (REST API)** | Your GPU | Free | Docker + NVIDIA | ✅ Yes | Production pipelines & automation |
-| **Colab (`train_on_colab.ipynb`)** | Free T4 | Free | None | ❌ No | Quick experiments without local GPU |
-| **Cloud (GCP)** | Cloud GPU | ~$1-2/hr | Medium | ✅ Yes | Production training at scale |
+| Method | GPU | Cost | Setup | MLflow | Automatable | Best For |
+|--------|-----|------|-------|--------|-------------|----------|
+| **Local (REST API)** | Your GPU | Free | Docker + NVIDIA | ✅ Yes | ✅ Yes | Production pipelines with local GPU |
+| **Modal (`modal_train.py`)** | T4/A10G/A100 | $30/month free* | Minimal | ❌ No | ✅ Yes | Automated training without local GPU |
+| **Colab (`train_on_colab.ipynb`)** | Free T4 | Free | None | ❌ No | ❌ No | Quick manual experiments |
+| **Cloud (GCP)** | Cloud GPU | ~$1-2/hr | Medium | ✅ Yes | ✅ Yes | Production training at scale |
+
+\* Modal Starter plan includes $30 of free compute credits per month (~15-30 hours of T4 GPU time)
 
 ### Local Training via REST API
 
@@ -90,6 +110,50 @@ curl -X POST http://localhost:8000/train \
 
 Results tracked in MLflow UI at http://localhost:5000
 
+### Modal Cloud Training
+
+Train on Modal's cloud GPUs with pay-as-you-go pricing. **Includes $30/month free credits on Starter plan** - perfect for automated training without local GPU.
+
+**Prerequisites:**
+```bash
+# Install Modal
+pip install modal
+
+# Authenticate (one-time)
+modal token new
+```
+
+**Run Training:**
+```bash
+# Default: MobileNet on T4 GPU
+modal run modal_train.py
+
+# Custom model and GPU
+modal run modal_train.py --base-model XCEPTION --gpu A100-40GB
+
+# Custom epochs
+modal run modal_train.py --epochs-pretrain 8 --epochs-finetune 15
+```
+
+**Available Options:**
+- **Models**: `MOBILE_NET`, `XCEPTION`, `EFFICIENT_NET_V2`
+- **GPUs**: `T4` (~$0.60/hr), `A10G` (~$1.10/hr), `A100-40GB` (~$2.50/hr), `A100-80GB`
+
+**Important**: Modal uses the Docker image from GitHub Container Registry (`ghcr.io/martinrajniak/bean-disease-classification-image:latest`). To train with your latest code changes:
+1. Push changes to GitHub
+2. Run the `build_and_push_docker` GitHub Action to build new image
+3. Wait for build to complete (~10 min)
+4. Run `modal run modal_train.py`
+
+Models download automatically to `models/modal_{model}_{timestamp}/` after training.
+
+**Why Modal?**
+- ✅ Free tier ($30/month credits) vs paid-only cloud providers
+- ✅ Automatable via CLI/Python (unlike Colab)
+- ✅ No local GPU required
+- ✅ Dataset caching (faster subsequent runs)
+- ✅ Access to faster GPUs (A100) vs Colab's T4
+
 ### Google Colab Training
 
 Upload `train_on_colab.ipynb` to Colab, enable GPU (Runtime → Change runtime type → GPU), and run all cells. Training takes ~15-30 minutes and produces downloadable Keras + TFLite models.
@@ -99,6 +163,20 @@ Upload `train_on_colab.ipynb` to Colab, enable GPU (Runtime → Change runtime t
 ### Cloud Training (GCP)
 
 Coming soon.
+
+## Mobile App
+
+Android application for real-time bean disease detection using trained TFLite models.
+
+**Location**: [`mobile/`](mobile/) directory (Kotlin/Android)
+
+**Features**:
+- Camera integration for live disease detection
+- Offline inference using TFLite model
+- Automatic model download from GitHub releases
+- Displays disease predictions with confidence scores
+
+**Get Started**: Download the latest APK from [GitHub Releases](https://github.com/martinr92/Bean-Disease-Classification/releases) or build from source in the `mobile/` directory.
 
 ## Local Development Setup
 
@@ -151,6 +229,7 @@ bean-disease-classification/
 ├── Dockerfile                         # Training service image (multi-stage)
 ├── requirements.txt                   # Python dependencies
 ├── docker-compose.local.yml          # Local environment configuration
+├── modal_train.py                    # Modal cloud training script
 ├── bean_disease_classification.ipynb # Main tutorial notebook (start here)
 ├── train_on_colab.ipynb              # Google Colab training notebook
 ├── test_model_performance.ipynb      # Model comparison and evaluation
@@ -230,18 +309,22 @@ docker run --gpus all --rm -it \
 
 ## Technology Stack
 
-**Core Components:**
+**ML/Training:**
 - TensorFlow 2.19.0 with CUDA - GPU-accelerated deep learning
+- Transfer learning - Xception/EfficientNetV2/MobileNet (ImageNet pretrained)
+- Two-phase training - Freeze base → Fine-tune layers
+- TFLite conversion - Mobile deployment optimization
+
+**Infrastructure:**
+- Docker + NVIDIA Container Toolkit - GPU containerization
+- Modal - Serverless cloud GPU compute
 - MLflow 3.4.0 - Experiment tracking and model registry
 - Apache Airflow 2.7.1 - Workflow orchestration
-- Flask + Gunicorn - Production API server
-- Docker + NVIDIA Container Toolkit - GPU containerization
+- Flask + Gunicorn - Production REST API
 
-**ML Pipeline:**
-- Transfer learning with ImageNet pretrained models
-- Stratified data splitting for balanced training
-- Two-phase training (freeze → fine-tune)
-- TFLite conversion for mobile deployment
+**Mobile:**
+- Kotlin/Android - Native mobile app
+- TFLite - On-device inference
 
 ## Troubleshooting
 
