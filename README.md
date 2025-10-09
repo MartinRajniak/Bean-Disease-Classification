@@ -12,6 +12,7 @@ End-to-end ML pipeline for bean disease classification with GPU-accelerated trai
 - [Experiment Tracking & Orchestration](#experiment-tracking--orchestration)
 - [Debugging](#debugging)
 - [Technology Stack](#technology-stack)
+- [Roadmap](#roadmap)
 - [Troubleshooting](#troubleshooting)
 
 ## Getting Started
@@ -325,6 +326,118 @@ docker run --gpus all --rm -it \
 **Mobile:**
 - Kotlin/Android - Native mobile app
 - TFLite - On-device inference
+
+## Roadmap
+
+### 🎯 Milestone 1: Automated MLOps Pipeline
+**Goal**: End-to-end automation from training → evaluation → deployment
+
+**Tasks**:
+- [ ] GitHub Actions workflow for scheduled/triggered training on Modal
+- [ ] Automated model evaluation against baseline metrics
+- [ ] Auto-promotion to production if performance improves
+- [ ] Auto-create GitHub releases with TFLite models
+- [ ] Mobile app auto-update mechanism for latest models
+- [ ] Notification system for training completion/failures
+
+**Impact**: Continuous model improvement without manual intervention
+
+---
+
+### 🎯 Milestone 2: Production Model Monitoring & Drift Detection
+**Goal**: Real-time visibility into production model performance
+
+**Tasks**:
+- [ ] Prediction logging API endpoint (mobile app → backend)
+- [ ] Metrics dashboard: prediction distribution, confidence scores, error rates
+- [ ] Data drift detection (compare production vs training distribution)
+- [ ] Model performance monitoring (accuracy degradation alerts)
+- [ ] Auto-trigger retraining on drift/performance drop
+- [ ] A/B testing framework for comparing model versions
+
+**Tools**: Evidently AI, WhyLabs, or Grafana dashboard
+
+**Impact**: Early detection of model degradation, data-driven retraining decisions
+
+---
+
+### 🎯 Milestone 3: Interactive Web Demo
+**Goal**: Browser-based demo for easy access and showcasing
+
+**Tasks**:
+- [ ] Gradio interface for image upload → prediction
+- [ ] Deploy to HuggingFace Spaces (free hosting)
+- [ ] Display confidence scores and prediction explanations
+- [ ] Example image gallery with pre-loaded samples
+- [ ] User feedback collection mechanism
+- [ ] Integration with README and project landing page
+
+**Impact**: Increased visibility, user feedback collection, portfolio showcase
+
+---
+
+### 🎯 Milestone 4: Comprehensive Testing Suite
+**Goal**: Ensure code quality and prevent regressions
+
+**Tasks**:
+- [ ] Unit tests: data loading, preprocessing, model architecture
+- [ ] Integration tests: training pipeline, API endpoints, MLflow tracking
+- [ ] Model regression tests: performance benchmarks on test set
+- [ ] GitHub Actions CI: run tests on every PR
+- [ ] Test coverage reporting (target: >80%)
+- [ ] Pre-commit hooks for linting and formatting
+
+**Tools**: pytest, coverage.py, pre-commit
+
+**Impact**: Reliable codebase, safe refactoring, faster development
+
+---
+
+### 🎯 Milestone 5: Multi-Crop Disease Detection
+**Goal**: Expand to multiple crops for broader agricultural impact
+
+**Tasks**:
+- [ ] Integrate PlantVillage dataset (14 crops, 38 diseases)
+- [ ] Implement multi-task model or crop-specific models
+- [ ] Hierarchical classification: crop type → disease detection
+- [ ] Update mobile app UI for crop selection
+- [ ] Comparative benchmarks across crops
+- [ ] Transfer learning experiments: bean model → other crops
+
+**Impact**: 10x more valuable for farmers, more complex ML problem
+
+---
+
+### 💡 Future Enhancements
+
+**Data & Training**:
+- Data versioning with DVC
+- Automated hyperparameter tuning (Optuna)
+- Active learning pipeline for hard examples
+- Synthetic data generation for rare diseases
+
+**Model Explainability**:
+- Grad-CAM visualizations (which leaf parts influenced prediction)
+- SHAP values for feature importance
+- Confidence calibration analysis
+
+**Deployment**:
+- iOS mobile app
+- Raspberry Pi edge deployment kit for offline field use
+- WhatsApp bot integration for farmers
+- Progressive Web App (PWA) version
+
+**API & Documentation**:
+- OpenAPI/Swagger documentation
+- Public API with rate limiting
+- SDK/client libraries (Python, JavaScript)
+
+**Infrastructure**:
+- Kubernetes deployment for production API
+- Auto-scaling based on traffic
+- Multi-region deployment for low latency
+
+---
 
 ## Troubleshooting
 
